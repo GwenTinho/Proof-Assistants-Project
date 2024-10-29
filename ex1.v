@@ -1,3 +1,14 @@
+(*
+Previous experince:
+Quentin Schroeder
+
+I took the class about proof assistants last semester with Hugo Herbelin where we had to implement a decision proof for propositional intuintionistic logic in coq as the final project.
+
+I had some experience before that trying to formalize some topology proofs (but failed)
+
+And I attended the proof and computation autumn school twice, where proof assistants were discussed a lot
+ *)
+
 Require Import List.
 Import ListNotations.
 Inductive form : Type :=
@@ -12,7 +23,8 @@ Notation neg s := ( imp s bot).
 Inductive ndc : list form -> form -> Prop :=
   | ndc_Ax x A : In x A -> ndc A x
   | ndc_ImpI s A t : ndc (s :: A) t -> ndc A (s ∼> t)
-  | ndc_ImpE s A t : ndc A (s ∼> t) -> ndc A s -> ndc A t                             | ndc_DNE s A : ndc ((neg s) :: A) bot -> ndc A s   
+  | ndc_ImpE s A t : ndc A (s ∼> t) -> ndc A s -> ndc A t
+  | ndc_DNE s A : ndc ((neg s) :: A) bot -> ndc A s   
 .
 
 
@@ -141,48 +153,123 @@ end.
 
 (*Question 1.2.e*)
 
+
+
+
 Lemma DNE_Friedman A s t :
 A ⊢m (( trans t s ∼> t) ∼> t) ∼> (trans t s).
 Proof.
-  induction s as [x | | u IHu v IHv].
-  - admit.
-  - simpl.
-    apply ndm_ImpI.
-    apply ndm_ImpE with (t ∼> t).
-    + apply ndm_Ax. firstorder.
-    + apply ndm_ImpI. apply ndm_Ax. firstorder.
-  - simpl.
-    apply ndm_ImpI.
-    apply ndm_ImpI.
-    apply ndm_ImpE with ((trans t v ∼> t) ∼> t).
-    + apply Weakm with A.
-      * assumption.
-      * apply incl_tl. apply incl_tl. apply incl_refl.
-    + admit.
-Admitted.
+  - apply ndm_ImpI.
+    induction s.
+    + simpl.
+      apply ndm_ImpI.
+      apply ndm_ImpE with (((var x ∼> t) ∼> t) ∼> t).
+      * apply ndm_Ax. firstorder.
+      * apply ndm_ImpI.
+        apply ndm_ImpE with (var x ∼> t).
+        -- apply ndm_Ax. firstorder.
+        -- apply ndm_Ax. firstorder.
+    + simpl. apply ndm_ImpE with (t ∼> t).
+      * apply ndm_Ax. firstorder.
+      * apply ndm_ImpI.
+        apply ndm_Ax. firstorder.
+   + simpl.
+     apply ndm_ImpI.
+     apply ndm_ImpE with ((trans t s2 ∼> t) ∼> t).
+     * apply ndm_ImpI.
+       apply Weakm with ((trans t s2 ∼> t) ∼> t :: A).
+       -- assumption.
+       -- firstorder.
+    * apply ndm_ImpI.
+      apply ndm_ImpE with ((trans t s1 ∼> trans t s2) ∼> t).
+      -- apply ndm_Ax. firstorder.
+      -- apply ndm_ImpI.
+         apply ndm_ImpE with (trans t s2).
+         ++ apply ndm_Ax. firstorder.
+         ++ apply ndm_ImpE with (trans t s1).
+            ** apply ndm_Ax. firstorder.
+            ** apply ndm_Ax. firstorder.
+Qed.
+
+Corollary DNE_Friedman_Split A s t :
+  (A ⊢m (trans t s ∼> t) ∼> t) -> (A ⊢m trans t s).
+Proof.
+  intro H.
+  apply ndm_ImpE with ((trans t s ∼> t) ∼> t).
+  - apply DNE_Friedman.
+  - apply H.
+Qed.
         
 (*Question 1.2.f*)
+
 
 Lemma Friedman A s t :
 A ⊢c s -> map (trans t) A ⊢m trans t s.
 Proof.
   intro H.
-
-Admitted.
-
+  induction H.
+  - apply ndm_Ax.
+    apply in_map_iff.
+    exists x. auto.
+  - simpl.
+    apply ndm_ImpI.
+    auto.
+  - simpl in IHndc1.
+    apply ndm_ImpE with (trans t s); assumption.
+  - simpl in IHndc.
+    apply DNE_Friedman_Split.
+    apply ndm_ImpI.
+    assumption.
+Qed.
+    
 
 (*1.2.g*)
+
+(*I tried to prove it without a lemma of this shape at first but it just wasn't general enough. This one here works nicely though*)
+Lemma ground_trans_bot s:
+  ground s -> forall A, A ⊢m trans bot s <-> A ⊢m s.
+Proof.
+  intro H.
+  induction s.
+  - firstorder.
+  - firstorder.
+  - simpl in *.
+    firstorder.
+    + apply ndm_ImpI.
+      apply H2.
+      apply ndm_ImpE with (trans bot s1).
+      * apply Weakm with A; firstorder.
+      * apply H3. apply ndm_Ax. firstorder.
+   + apply ndm_ImpI.
+     apply H2.
+     apply ndm_ImpE with s1.
+     * apply Weakm with A; firstorder.
+     * apply H3. apply ndm_Ax. firstorder.
+Qed.
 
 Lemma ground_truths s :
 ground s -> ([] ⊢m s <-> [] ⊢c s).
 Proof.
-
-
-Admitted.
-
+  intro ground_s.  
+  split.
+  - apply Implication.
+  - intro H.
+    induction s.
+    + simpl in ground_s. contradiction.
+    + apply Friedman with (t := bot) in H. apply H.
+    + simpl in *.
+      firstorder.
+      apply Friedman with (t := bot) in H.
+      simpl in H.
+      apply ndm_ImpI.
+      rewrite <- (ground_trans_bot s2 H1).
+      apply ndm_ImpE with (trans bot s1).
+      * apply Weakm with []; firstorder.
+      * apply (ground_trans_bot s1 H0). apply ndm_Ax. firstorder.
+Qed.
 
 (*1.2.h*)
 Lemma equi_consistent : [] ⊢c bot <-> [] ⊢m bot.
 Proof.
-
-Admitted.
+  now rewrite ground_truths.
+Qed.
