@@ -334,6 +334,51 @@ Proof.
       * left. exists (e1 e''). apply redAppR. assumption.
       * right. admit.
 Admitted.
-       
+
+Corollary weak_norm e s :
+ ( nil ⊢ e : s) ->
+SN e ->
+exists e', e ≻* e' /\ (nil ⊢ e' : s) /\ ~ (neutral e').
+Proof.
+  intros H0 SNe.
+  apply SN_to_WN; eauto using preservation, progress.
+Qed.       
+        
+Fixpoint forces e s := match s with
+| bot => SN e
+| var x => SN e
+| s ∼> t => forall e', forces e' s -> forces (e e') t
+end.
+
+Notation " ⊨ e : s" := (forces e s)  ( at level 60, e at next level).
+
+Theorem forcing_prop : forall s e, (⊨ e : s -> SN e) /\ ( ⊨ e : s -> forall e', e ≻* e' -> ⊨ e' : s) /\ (neutral e -> (forall e', e ≻ e' -> ⊨ e' : s) -> ⊨ e : s).
+Proof.
+  intro s.
+  induction s; intro e.
+  - firstorder.
+    + now apply SN_on_rtc with e.
+    + constructor. apply H0.
+  - firstorder.
+    + now apply SN_on_rtc with e.
+    + constructor. apply H0.
+  - split.
+    + intro H.
+      simpl in H.
+      apply SN_app with (V 0).
+      apply IHs2.
+      apply H.
+      apply IHs1.
+      * split.
+      * intros e' H0. inv H0.
+    + split.
+      * intros force e0 reduces e1 forces1.
+        simpl in force.
+        apply app_red with (e2 := e1) in reduces.
+        admit.
+      * admit.
+Admitted.
+
         
     
+       
