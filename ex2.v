@@ -153,7 +153,7 @@ Qed.
 End ARS.
 
 
-Lemma SN_on_double_int (A B : Type) ( R1 : A -> A -> Prop) (R2 : B -> B -> Prop)
+Lemma SN_on_double_ind (A B : Type) ( R1 : A -> A -> Prop) (R2 : B -> B -> Prop)
   (P : A -> B -> Prop) :
   ( forall (a : A) (b : B),
   ( forall (a' : A), R1 a a' -> SN_on R1 a') ->
@@ -191,6 +191,7 @@ Inductive typing : term -> form -> Prop :=
 
 Notation "⊢ e : s" := ( typing e s) ( at level 60, e at next level).
 
+
 Lemma hil_equiv s :
 hil A s <-> exists e, ⊢ e : s.
 Proof.
@@ -222,32 +223,27 @@ Inductive red : term -> term -> Prop :=
 
 Notation "e1 ≻ e2" := ( red e1 e2) ( at level 60).
 
+Lemma inversion_red : forall e e', e ≻ e' -> (exists e'', e = K e' e'') \/ (exists e1 e2 e3, S e1 e2 e3 = e /\ e1 e3 (e2 e3) = e') \/ (exists e1 e1' e2, e = e1 e2 /\ e' = e1' e2) \/ (exists e1 e2 e2', e = e1 e2 /\ e' = e1 e2').
+Proof.
+  intros e e' R.
+  inv R; firstorder eauto.
+Qed.
+
 Lemma preservation e1 e2 s :
 ⊢ e1 : s ->
 e1 ≻ e2 ->
 ⊢ e2 : s.
 Proof.
   revert s e2.
-  induction e1; intros.
-  - inversion H0.
+  induction e1; eauto 8 using inversion_red, ArrE; intros.
   - inv H0.
   - inv H0.
   - inv H0.
-    + inv H.
-      inv H2.
-      inv H1.
-      assumption.
-    + inv H.
-      inv H2.
-      inv H1.
-      inv H2.
-      eauto using ArrE.
-    + inv H.
-      specialize (IHe1_1 (s0 ∼> s) e1' H2 H4).
-      eauto using ArrE.
-    + inv H.
-      specialize (IHe1_2 s0 e2' H5 H4).
-      eauto using ArrE.
+  - inv H0; inv H
+    + inv H2. inv H2. inv H1. assumption.
+    + inv H2. inv H1. inv H2. eauto using ArrE.
+    + eauto using ArrE.
+    + eauto using ArrE.
 Qed.
 
 Definition reds :=
@@ -260,7 +256,7 @@ e1 e2 ≻* e1' e2.
 Proof.
   intro H.
   revert e2.
-  induction H;intro e2.
+  induction H; intro e2.
   - apply Refl.
   - apply Incl.
     apply redAppL.
@@ -278,10 +274,7 @@ e1 ≻* e2 ->
 ⊢ e2 : s.
 Proof.
   intros He Hred.
-  induction Hred.
-  - assumption.
-  - now apply preservation with x.
-  - auto.
+  induction Hred; eauto using preservation.
 Qed.
 
 End typing.
@@ -294,14 +287,32 @@ Definition SN (e : term) :=
 SN_on red e.
 
 
+(*idea comes from the formalization of strong normalisation for STLC that Thibault and I did for the foundations of proof systems class*)
+
+Inductive sub_term : term -> term -> Prop :=
+| Sub_app2 (t1 t2 : term) : sub_term t2 (app t1 t2)
+| Sub_app1 (t1 t2 : term) : sub_term t1 (app t1 t2)
+.
+
+Lemma sn_sub_term : forall (t : term),
+    SN t -> (forall t':term, sub_term t' t -> SN t').
+Proof.
+  intros t H. induction H.
+  intros t' Hsub. inversion Hsub; subst; constructor.
+  - intros u Hstep.
+    eapply H0; constructor; easy.
+  - intros y R.
+    eapply H0; eauto using redAppL, Sub_app1.
+Qed.
+
 Lemma SN_app e1 e2 :
 SN ( e1 e2) -> SN e1.
 Proof.
-  constructor.
-  generalize dependent e2.
-  induction e1.
+  intros H.
+  apply sn_sub_term with (e1 e2).
+  - assumption.
   - constructor.
-Admitted.
+Qed.
 
 Definition neutral (e : term) :=
 match e with
@@ -309,40 +320,24 @@ match e with
 | _ => True
 end.
 
+  
+  
+
 Lemma neutral_app e1 e2 :
 neutral e1 -> neutral (e1 e2).
 Proof.
   intro H.
   induction e1; [easy.. | now destruct e1_1].
 Qed.
-    
-  
-Lemma progress e s :
-( nil ⊢ e : s) -> (exists e', red e e') \/ ~ neutral e.
-Proof.
-  revert s.
-  induction e; intros s H.
-  - inv H.
-    now right.
-  - inv H.
-    now right.
-  - inv H. now destruct n.
-  - inv H.
-    specialize (IHe1 _ H2) as [[e' H3] | nneut].
-    + left. exists (e' e2). apply redAppL. assumption.
-    + specialize (IHe2 _ H4) as [[e'' H5] | nneut'].
-      * left. exists (e1 e''). apply redAppR. assumption.
-      * right. admit.
-Admitted.
 
-Corollary weak_norm e s :
- ( nil ⊢ e : s) ->
-SN e ->
-exists e', e ≻* e' /\ (nil ⊢ e' : s) /\ ~ (neutral e').
+
+
+Lemma progress e s :
+( nil ⊢ e : s) -> (exists e', e ≻ e') \/ ~ neutral e.
 Proof.
-  intros H0 SNe.
-  apply SN_to_WN; eauto using preservation, progress.
-Qed.       
+       
+Admitted.           
+           
         
 Fixpoint forces e s := match s with
 | bot => SN e
@@ -381,4 +376,112 @@ Admitted.
 
         
     
-       
+Lemma K_forced : forall s t, ⊨ K : s ∼> t ∼> s.
+Proof.
+  intros s t e0 F0 e1 F1.
+  specialize (forcing_prop s e0) as (H0 & H1 & H2).
+  specialize (H0 F0).
+  specialize (forcing_prop t e1) as (H3 & H4 & H5).
+  specialize (H3 F1).
+  Search "double_ind".
+  apply SN_on_double_ind with (R1 := red) (R2 := red) (x := e0) (y := e1).
+  - intros.
+    apply forcing_prop.
+    + split.
+    + intros e' H9.
+      inv H9.
+      * admit.
+      * inv H13.
+        -- inv H12.
+        -- eauto.
+      * eauto.
+  - assumption.
+  - assumption.
+Admitted.
+
+
+
+     
+
+Lemma SN_triple_ind : False.
+Proof.
+Admitted.
+
+
+Lemma S_forced : forall s t u, ⊨ S : (s ∼> t ∼> u) ∼> (s ∼> t) ∼> s ∼> u.
+Proof.
+Admitted.
+
+(*
+Assume that whenever the n-th element of A is s, ⊨ V n : s holds. Then A ⊢ e : s
+implies ⊨ e : s.
+ *)
+Theorem V_forced : forall A s e, (forall t n, nth_error A n = Some t -> ⊨ V n : t) -> A ⊢ e : s -> ⊨ e : s.
+Proof.
+  intros A s e H types.
+  induction types.
+  - now apply H.
+  - exact (IHtypes1 e2 IHtypes2).
+  - apply K_forced.
+  - apply S_forced.
+Qed.
+
+Lemma well_typed_is_sn : forall s e, [] ⊢ e : s -> SN e.
+Proof.
+  intros s e H.
+  specialize (forcing_prop s e) as [H0 _].
+  apply H0.
+  clear H0.
+  generalize dependent s.
+  induction e; intros s H.
+  - inv H.
+    apply S_forced.
+  - inv H.
+    apply K_forced.
+  - inv H.
+    apply V_forced with nil; rewrite nth_error_nil in H1; inv H1.
+  - inv H.
+    apply IHe1 in H2.
+    apply IHe2 in H4.
+    apply (H2 e2 H4).
+Qed.
+
+Lemma well_typed_is_wn :
+  forall s e, [] ⊢ e : s -> exists e', e ≻* e' /\ [] ⊢ e' : s /\ ~ neutral e'.
+Proof.
+  intros s e H.
+  apply SN_to_WN; eauto using preservation, progress.
+  now apply well_typed_is_sn with s. 
+Qed.
+
+
+Lemma noterm e :
+~ [] ⊢ e : bot.
+Proof.
+  intro H.
+  specialize (well_typed_is_wn bot e H) as (e' & H1 & H2 & H3).
+Admitted.
+
+Corollary nd_consistent :
+~ [] ⊢m bot.
+Proof.
+  intro H.
+  apply ndm_hil in H.
+  apply hil_equiv in H.
+  destruct H as [e H].
+  apply noterm in H.
+  assumption.
+Qed.
+
+Corollary ndc_consistent :
+~ [] ⊢c bot.
+Proof.
+  rewrite equi_consistent.
+  apply nd_consistent.
+Qed.
+    
+  
+  
+  
+  
+  
