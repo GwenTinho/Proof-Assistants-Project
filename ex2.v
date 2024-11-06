@@ -186,10 +186,28 @@ Search nth_error.
 Inductive typing : term -> form -> Prop :=
  | Var n s : nth_error A n = Some s -> typing (V n) s
  | ArrE e1 e2 s t : typing e1 (s ∼> t) -> typing e2 s -> typing (app e1 e2) t
- | Const s t : typing K (s ∼> t ∼> s)                                             | SOP s t u : typing S ((s ∼> t ∼> u) ∼> (s ∼> t) ∼> s ∼> u)
+ | Const s t : typing K (s ∼> t ∼> s)
+ | SOP s t u : typing S ((s ∼> t ∼> u) ∼> (s ∼> t) ∼> s ∼> u)
 .
 
 Notation "⊢ e : s" := ( typing e s) ( at level 60, e at next level).
+
+
+Create HintDb hil.
+
+Hint Resolve ArrE : hil.
+Hint Resolve Const : hil.
+Hint Resolve SOP : hil.
+Hint Resolve Var : hil.
+Hint Resolve nth_error_In : hil.
+Hint Resolve In_iff_nth_error : hil.
+Hint Resolve hil_Weak : hil.
+Hint Resolve hil_Comp : hil.
+Hint Resolve ndm_hil : hil.
+Hint Resolve hil_ndm : hil.
+Hint Resolve ndm_ImpE : hil.
+Hint Resolve hil_Ax : hil.
+
 
 
 Lemma hil_equiv s :
@@ -197,21 +215,12 @@ hil A s <-> exists e, ⊢ e : s.
 Proof.
   split.
   - intro H.
-    induction H as [s | s t Hs [e He] Ht [e0 He0]| | ].
+    induction H as [s | s t Hs [e He] Ht [e0 He0]| | ]; eauto with hil.
     + apply In_iff_nth_error in H.
       destruct H as [n H].
       exists (V n). apply Var. assumption.
-    + exists (app e0 e). apply ArrE with s; assumption.
-    + exists K. apply Const.
-    + exists S. apply SOP.
   - intros [e He].
-    induction He as [n s | _ _ s t _ Hst _ Hs | | ].
-    + apply nth_error_In in H. now apply hil_Ax.
-    + apply ndm_hil.
-      apply hil_ndm in Hst, Hs.
-      now apply ndm_ImpE with s.
-    + apply hil_Weak.
-    + apply hil_Comp.
+    induction He as [n s | _ _ s t _ Hst _ Hs | | ]; eauto with hil.
 Qed.
 
 
@@ -335,8 +344,23 @@ Qed.
 Lemma progress e s :
 ( nil ⊢ e : s) -> (exists e', e ≻ e') \/ ~ neutral e.
 Proof.
-       
-Admitted.           
+  intro H.
+  induction H.
+  - rewrite nth_error_nil in H. inv H.
+  - firstorder.
+    + left. exists (x0 e2). apply redAppL. assumption.
+    + left. exists (e1 x). apply redAppR. assumption.
+    + left. exists (x e2). apply redAppL. assumption.
+    + destruct e1; [firstorder .. | idtac].
+      * destruct e1_1.
+        -- firstorder.
+        -- left.  exists e1_2. apply redK.
+        -- firstorder.
+        -- destruct e1_1_1; [idtac | firstorder ..].
+           left. exists ((e1_1_2 e2) (e1_2 e2)). apply redS.
+  - firstorder.
+  - firstorder.
+Qed.      
            
         
 Fixpoint forces e s := match s with
@@ -369,48 +393,143 @@ Proof.
     + split.
       * intros force e0 reduces e1 forces1.
         simpl in force.
-        apply app_red with (e2 := e1) in reduces.
-        admit.
-      * admit.
-Admitted.
+        specialize (IHs2 (e e1)) as (_ & H & _).
+        specialize (force e1 forces1).
+        apply H.
+        -- assumption.
+        -- apply app_red. assumption.
+      * intros N H e0 F0.
+        destruct (IHs1 e0) as (H0 & _ & _).
+        specialize (H0 F0).
+        induction H0.
+        destruct (IHs2 (e x)) as (_ & _ & H3).
+        apply H3.
+        -- apply neutral_app. assumption.
+        -- intros e' F'.
+           inv F'.
+           ++ firstorder.
+           ++ firstorder.
+           ++ now apply H.
+           ++ apply H1.
+              ** assumption.
+              ** destruct (IHs1 x) as (_ & H7 & _).
+                 apply H7.
+                 --- assumption.
+                 --- apply Incl. assumption.
+Qed.
 
         
     
 Lemma K_forced : forall s t, ⊨ K : s ∼> t ∼> s.
 Proof.
   intros s t e0 F0 e1 F1.
-  specialize (forcing_prop s e0) as (H0 & H1 & H2).
-  specialize (H0 F0).
-  specialize (forcing_prop t e1) as (H3 & H4 & H5).
-  specialize (H3 F1).
-  Search "double_ind".
-  apply SN_on_double_ind with (R1 := red) (R2 := red) (x := e0) (y := e1).
-  - intros.
-    apply forcing_prop.
-    + split.
-    + intros e' H9.
-      inv H9.
-      * admit.
-      * inv H13.
-        -- inv H12.
+  specialize (forcing_prop s e0) as (S0 & H0 & _).
+  specialize (forcing_prop t e1) as (S1 & H1 & _).
+  specialize (S0 F0).
+  specialize (S1 F1).
+  revert F0 F1 H0 H1.
+  apply SN_on_double_ind with (R1 := red) (R2 := red) (x := e0) (y := e1); try assumption.
+  intros a b _ H0 _ H1 Fa Fb IHa IHb.
+  apply forcing_prop.
+  - split.
+  - intros e' R.
+    specialize (IHa Fa).
+    specialize (IHb Fb).
+    inv R.
+    + assumption.
+    + inv H4.
+      * inv H5.
+      * apply H0.
+        -- assumption.
+        -- apply IHa. now apply Incl.
         -- eauto.
+        -- intros. apply IHa. apply Trans with e2'.
+           ++ now apply Incl.
+           ++ assumption.
+        -- eauto.
+    + apply H1; try assumption.
+      * apply IHb. now apply Incl.
       * eauto.
-  - assumption.
-  - assumption.
-Admitted.
+      * intros. apply IHb. apply Trans with e2'.
+        -- apply Incl. assumption.
+        -- assumption.
+Qed.
 
 
 
      
-
-Lemma SN_triple_ind : False.
+Lemma SN_triple_ind
+  (P : term -> term -> term -> Prop) :
+  ( forall a b c,
+  ( forall a', a ≻ a' -> SN a') ->
+  ( forall a', a ≻ a' -> P a' b c) ->
+  ( forall b', b ≻ b' -> SN b') ->
+  ( forall b', b ≻ b' -> P a b' c) ->
+  ( forall c', c ≻ c' -> SN c') ->
+  ( forall c', c ≻ c' -> P a b c') ->
+  P a b c
+  ) -> forall x y z, SN x -> SN y -> SN z -> P x y z.
 Proof.
-Admitted.
+  intros IH x y z SNx.
+  revert y z.
+  induction SNx.
+  intros y z SNy.
+  generalize dependent z.
+  induction SNy.
+  intros z SNz.
+  induction SNz.
+  apply IH; try auto.
+  - intros.
+    apply H0; [assumption | constructor; auto | constructor; auto].
+  - intros.
+    apply H2; [easy | constructor; auto ].
+Qed.
 
 
 Lemma S_forced : forall s t u, ⊨ S : (s ∼> t ∼> u) ∼> (s ∼> t) ∼> s ∼> u.
 Proof.
-Admitted.
+  intros s t u e0 F0 e1 F1 e2 F2.
+  specialize (forcing_prop (s ∼> t ∼> u) e0) as (S0 & H0 & _).
+  specialize (S0 F0).
+  specialize (forcing_prop (s ∼> t) e1) as (S1 & H1 & _).
+  specialize (S1 F1).
+  specialize (forcing_prop s e2) as (S2 & H2 & _).
+  specialize (S2 F2).
+  revert F0 F1 F2 H0 H1 H2. 
+  apply SN_triple_ind with (x := e0) (y := e1) (z := e2); try assumption.
+  intros a b c _ H0 _ H1 _ H2 Fa Fb Fc IHa IHb IHc.
+  apply forcing_prop.
+  - split.
+  - specialize (IHa Fa).
+    specialize (IHb Fb).
+    specialize (IHc Fc).
+    intros d R.
+    inv R.
+    + simpl in Fa. apply Fa.
+      * assumption.
+      * simpl in Fb. apply Fb. assumption.
+    + inv H5.
+      * inv H6.
+        -- inv H5.
+        -- apply H0; eauto using Incl.
+           ++ apply IHa. now apply Incl.
+           ++ intros Fe2' e' Re'.
+              apply IHa. apply Trans with e2'.
+              ** now apply Incl.
+              ** assumption.
+      * apply H1; eauto.
+        -- apply IHb. now apply Incl.
+        -- intros Fe2' e' Re'.
+           apply IHb. apply Trans with e2'.
+           ++ now apply Incl.
+           ++ assumption.
+    + apply H2; eauto.
+      * apply IHc. now apply Incl.
+      * intros Fe2' e' Re'.
+        apply IHc. apply Trans with e2'.
+        -- now apply Incl.
+        -- assumption.
+Qed.
 
 (*
 Assume that whenever the n-th element of A is s, ⊨ V n : s holds. Then A ⊢ e : s
@@ -460,7 +579,27 @@ Lemma noterm e :
 Proof.
   intro H.
   specialize (well_typed_is_wn bot e H) as (e' & H1 & H2 & H3).
-Admitted.
+  destruct e'.
+  - inv H2.
+  - inv H2.
+  - inv H2.
+    rewrite nth_error_nil in H4. inv H4.
+  - inv H2.
+    destruct e'1.
+    + inv H5.
+    + inv H5.
+    + inv H5.
+      rewrite nth_error_nil in H2. inv H2.
+    + destruct e'1_1.
+      * inv H5.
+        inv H4.
+      * firstorder.
+      * inv H5.
+        inv H4.
+        rewrite nth_error_nil in H2. inv H2.
+      * firstorder.
+Qed.
+
 
 Corollary nd_consistent :
 ~ [] ⊢m bot.
