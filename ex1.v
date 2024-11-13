@@ -6,7 +6,17 @@ I took the class about proof assistants last semester with Hugo Herbelin where w
 
 I had some experience before that trying to formalize some topology proofs (but failed)
 
+
 And I attended the proof and computation autumn school twice, where proof assistants were discussed a lot
+
+
+I talked to Thibault about two questions where he gave me somewhat cryptic hints.
+That was for Question 1.2.g where he said "that you must generalize your proof".
+And for Question 2.3.i and he said and i quote "You chose a branch to prove too early".
+
+In terms of the mini projects I used automation where possible, but that's as far as it went for me.
+
+Mouloud told me that Hint Constructors exists, which was very nice 
  *)
 
 Require Import List.
@@ -27,6 +37,15 @@ Inductive ndc : list form -> form -> Prop :=
   | ndc_DNE s A : ndc ((neg s) :: A) bot -> ndc A s   
 .
 
+Create HintDb ndc.
+Hint Constructors ndc : ndc.
+
+Create HintDb indb.
+
+#[export] Hint Resolve in_eq : indb.
+#[export] Hint Resolve in_cons : indb.
+
+
 
 Notation "A ⊢c s" := (ndc A s) (at level 70).
 
@@ -34,38 +53,32 @@ Notation "A ⊢c s" := (ndc A s) (at level 70).
 (*Question 1.1.b.1*)
 Lemma ndc_id : forall A s, A ⊢c s ∼> s.
 Proof.
-  intros A s.
-  apply ndc_ImpI.
-  apply ndc_Ax.
-  firstorder.
+  eauto with ndc indb.
 Qed.
 
 (*Question 1.1.b.2*)
 Lemma ndc_dni : forall A s, s :: A ⊢c neg (neg s).
 Proof.
-  intros A s.
-  apply ndc_ImpI.
-  apply ndc_ImpE with s; apply ndc_Ax; firstorder.
+  eauto 8 with ndc indb.
 Qed.
 
 (*Question 1.1.b.3*)
 Lemma ndc_escape :  [neg (neg bot)] ⊢c bot.
 Proof.
-  apply ndc_ImpE with (neg bot).
-  - apply ndc_Ax. firstorder.
-  - apply ndc_ImpI. apply ndc_Ax. firstorder.
+  eauto 8 with ndc indb.
 Qed.
 
 (*Question 1.1.b.4*)
 
 Lemma ndc_dne : forall A s, A ⊢c neg (neg s) ∼> s.
 Proof.
-  intros A s.
-  apply ndc_ImpI.
-  apply ndc_DNE.
-  apply ndc_ImpE with (neg s);
-  apply ndc_Ax; firstorder.
+  eauto 8 with ndc indb.
 Qed.
+
+Search incl.
+
+Create HintDb incldb.
+
 
 (*Question 1.1.c*)
 
@@ -77,6 +90,8 @@ Proof.
   - firstorder.
   - apply incl_tl. assumption.
 Qed.
+
+Hint Resolve incl_step : incldb.
   
 
 
@@ -84,16 +99,7 @@ Fact Weakc : forall A B s, A ⊢c s -> incl A B -> B ⊢c s.
 Proof.
   intros A B s H.
   generalize dependent B.
-  induction H as [| s A t H IH| s A t H1 IH1 H2 IH2| s A t IH]; intros B inc.
-  - apply ndc_Ax. apply inc. assumption.
-  - apply ndc_ImpI. apply IH. apply incl_step. assumption.
-  - apply ndc_ImpE with s.
-    + apply IH1. assumption.
-    + apply IH2. assumption.
-  - apply ndc_DNE.
-    apply IH.
-    apply incl_step.
-    assumption.
+  induction H as [| s A t H IH| s A t H1 IH1 H2 IH2| s A t IH]; eauto with ndc incldb.
 Qed.
 
 
@@ -110,9 +116,11 @@ end.
 Inductive ndm : list form -> form -> Prop :=
   | ndm_Ax x A : In x A -> ndm A x
   | ndm_ImpI s A t : ndm (s :: A) t -> ndm A (s ∼> t)
-  | ndm_ImpE s A t : ndm A (s ∼> t) -> ndm A s -> ndm A t                              
+  | ndm_ImpE s A t : ndm A (s ∼> t) -> ndm A s -> ndm A t
 .
 
+Create HintDb ndm.
+Hint Constructors ndm : ndm.
 
 Notation "A ⊢m s" := (ndm A s) (at level 70).
 
@@ -123,12 +131,7 @@ A ⊢m s -> incl A B -> B ⊢m s.
 Proof.
   intros H.
   generalize dependent B.
-  induction H as [| s A t H IH| s A t H1 IH1 H2 IH2]; intros B inc.
-  - constructor. apply inc. assumption.
-  - apply ndm_ImpI. apply IH. apply incl_step. assumption.
-  - apply ndm_ImpE with s.
-    + apply IH1. assumption.
-    + apply IH2. assumption.
+  induction H as [| s A t H IH| s A t H1 IH1 H2 IH2]; eauto with ndm incldb.
 Qed.
 
 (*Question 1.2.c*)
@@ -136,10 +139,7 @@ Lemma Implication A s :
 A ⊢m s -> A ⊢c s.
 Proof.
   intro H.
-  induction H as [| s A t H IH| s A t H1 IH1 H2 IH2].
-  - apply ndc_Ax. assumption.
-  - apply ndc_ImpI. assumption.
-  - apply ndc_ImpE with s; assumption.
+  induction H as [| s A t H IH| s A t H1 IH1 H2 IH2]; eauto with ndc.
 Qed.
 
 
@@ -153,26 +153,13 @@ end.
 
 (*Question 1.2.e*)
 
-
-
-
 Lemma DNE_Friedman A s t :
 A ⊢m (( trans t s ∼> t) ∼> t) ∼> (trans t s).
 Proof.
   - apply ndm_ImpI.
     induction s.
-    + simpl.
-      apply ndm_ImpI.
-      apply ndm_ImpE with (((var x ∼> t) ∼> t) ∼> t).
-      * apply ndm_Ax. firstorder.
-      * apply ndm_ImpI.
-        apply ndm_ImpE with (var x ∼> t).
-        -- apply ndm_Ax. firstorder.
-        -- apply ndm_Ax. firstorder.
-    + simpl. apply ndm_ImpE with (t ∼> t).
-      * apply ndm_Ax. firstorder.
-      * apply ndm_ImpI.
-        apply ndm_Ax. firstorder.
+    + simpl. eauto 10 with ndm indb.
+    + simpl. eauto 9 with ndm indb.
    + simpl.
      apply ndm_ImpI.
      apply ndm_ImpE with ((trans t s2 ∼> t) ∼> t).
@@ -181,14 +168,9 @@ Proof.
        -- assumption.
        -- firstorder.
     * apply ndm_ImpI.
-      apply ndm_ImpE with ((trans t s1 ∼> trans t s2) ∼> t).
-      -- apply ndm_Ax. firstorder.
-      -- apply ndm_ImpI.
-         apply ndm_ImpE with (trans t s2).
-         ++ apply ndm_Ax. firstorder.
-         ++ apply ndm_ImpE with (trans t s1).
-            ** apply ndm_Ax. firstorder.
-            ** apply ndm_Ax. firstorder.
+      (*eauto doesnt figure out what to use the elimination on*)
+      apply ndm_ImpE with ((trans t s1 ∼> trans t s2) ∼> t);
+         eauto 10 with ndm indb.
 Qed.
 
 Corollary DNE_Friedman_Split A s t :
@@ -226,11 +208,14 @@ Qed.
 (*1.2.g*)
 
 (*I tried to prove it without a lemma of this shape at first but it just wasn't general enough. This one here works nicely though*)
+
+
+
 Lemma ground_trans_bot s:
   ground s -> forall A, A ⊢m trans bot s <-> A ⊢m s.
 Proof.
-  intro H.
-  induction s.
+  intro G.
+  induction s as [n | | s1 IHs1 s2 IHs2].
   - firstorder.
   - firstorder.
   - simpl in *.
@@ -240,11 +225,11 @@ Proof.
       apply ndm_ImpE with (trans bot s1).
       * apply Weakm with A; firstorder.
       * apply H3. apply ndm_Ax. firstorder.
-   + apply ndm_ImpI.
-     apply H2.
-     apply ndm_ImpE with s1.
-     * apply Weakm with A; firstorder.
-     * apply H3. apply ndm_Ax. firstorder.
+     + apply ndm_ImpI.
+       apply H2.
+       apply ndm_ImpE with s1.
+       * apply Weakm with A; firstorder.
+       * apply H3. apply ndm_Ax. firstorder.
 Qed.
 
 Lemma ground_truths s :

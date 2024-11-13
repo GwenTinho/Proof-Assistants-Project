@@ -66,7 +66,10 @@ Proof.
 Qed.
 
 
-(*abstractions*)
+(*Question 2.1.d*)
+(*
+My guess is that the induction hypthesis won't be provable anymore
+ *)
 Lemma hil_abs {A} : forall s t, s :: A ⊢H t -> A ⊢H s ∼> t.
 Proof.
   intros s t H.
@@ -83,6 +86,7 @@ Proof.
 Qed.
 
 
+(*Question 2.1.e*)
 Fact ndm_hil {A s} :
   ndm A s -> hil A s.
 Proof.
@@ -104,16 +108,20 @@ Section ARS.
 Context [A : Type].
 Variable R : A -> A -> Prop.
 
+
+(*Question 2.2.a*)
 Inductive SN_on : A -> Prop :=
   | SN_Step x: (forall y, R x y -> SN_on y) -> SN_on x
 .
 
+(*Question 2.2.b*)
 Inductive rtc : A -> A -> Prop :=
   | Refl x : rtc x x
   | Incl x y : R x y -> rtc x y
   | Trans x y z : rtc x y -> rtc y z -> rtc x z
 .
 
+(*Question 2.2.c*)
 Lemma SN_on_rtc x y : SN_on x -> rtc x y -> SN_on y.
 Proof.
   intros Hsn Hrtc.
@@ -130,6 +138,7 @@ Variables T V : A -> Prop.
 Variable Hpres : forall x y, T x -> R x y -> T y.
 Variable Hprog : forall x, T x -> (exists y, R x y) \/ V x.
 
+(*Question 2.2.d*)
 Lemma SN_to_WN x :
 T x ->
 SN_on x ->
@@ -152,7 +161,7 @@ Qed.
 
 End ARS.
 
-
+(*2.2.e*)
 Lemma SN_on_double_ind (A B : Type) ( R1 : A -> A -> Prop) (R2 : B -> B -> Prop)
   (P : A -> B -> Prop) :
   ( forall (a : A) (b : B),
@@ -183,11 +192,13 @@ Section typing.
 Variable A : list form.
 Reserved Notation "⊢ e : s" (at level 60, e at next level).
 Search nth_error.
+
+(*Question 2.3.a*)
 Inductive typing : term -> form -> Prop :=
- | Var n s : nth_error A n = Some s -> typing (V n) s
- | ArrE e1 e2 s t : typing e1 (s ∼> t) -> typing e2 s -> typing (app e1 e2) t
- | Const s t : typing K (s ∼> t ∼> s)
- | SOP s t u : typing S ((s ∼> t ∼> u) ∼> (s ∼> t) ∼> s ∼> u)
+ | TV n s : nth_error A n = Some s -> typing (V n) s
+ | TAPP e1 e2 s t : typing e1 (s ∼> t) -> typing e2 s -> typing (app e1 e2) t
+ | TK s t : typing K (s ∼> t ∼> s)
+ | TS s t u : typing S ((s ∼> t ∼> u) ∼> (s ∼> t) ∼> s ∼> u)
 .
 
 Notation "⊢ e : s" := ( typing e s) ( at level 60, e at next level).
@@ -195,10 +206,10 @@ Notation "⊢ e : s" := ( typing e s) ( at level 60, e at next level).
 
 Create HintDb hil.
 
-Hint Resolve ArrE : hil.
-Hint Resolve Const : hil.
-Hint Resolve SOP : hil.
-Hint Resolve Var : hil.
+Hint Resolve TAPP : hil.
+Hint Resolve TK : hil.
+Hint Resolve TS : hil.
+Hint Resolve TV : hil.
 Hint Resolve nth_error_In : hil.
 Hint Resolve In_iff_nth_error : hil.
 Hint Resolve hil_Weak : hil.
@@ -209,7 +220,7 @@ Hint Resolve ndm_ImpE : hil.
 Hint Resolve hil_Ax : hil.
 
 
-
+(*Question 2.3.b*)
 Lemma hil_equiv s :
 hil A s <-> exists e, ⊢ e : s.
 Proof.
@@ -218,12 +229,13 @@ Proof.
     induction H as [s | s t Hs [e He] Ht [e0 He0]| | ]; eauto with hil.
     + apply In_iff_nth_error in H.
       destruct H as [n H].
-      exists (V n). apply Var. assumption.
+      exists (V n). apply TV. assumption.
   - intros [e He].
     induction He as [n s | _ _ s t _ Hst _ Hs | | ]; eauto with hil.
 Qed.
 
 
+(*Question 2.3.c*)
 Inductive red : term -> term -> Prop :=
  | redK e1 e2: red (app (app K e1) e2) e1
  | redS e1 e2 e3 : red (app (app (app S e1) e2) e3) (app (app e1 e3) (app e2 e3))
@@ -238,27 +250,33 @@ Proof.
   inv R; firstorder eauto.
 Qed.
 
+Create HintDb reddb.
+Hint Resolve inversion_red : reddb.
+
+
+(*Question 2.3.d*)
 Lemma preservation e1 e2 s :
 ⊢ e1 : s ->
 e1 ≻ e2 ->
 ⊢ e2 : s.
 Proof.
   revert s e2.
-  induction e1; eauto 8 using inversion_red, ArrE; intros.
+  induction e1; eauto 8 with hil reddb; intros.
   - inv H0.
   - inv H0.
   - inv H0.
   - inv H0; inv H
     + inv H2. inv H2. inv H1. assumption.
-    + inv H2. inv H1. inv H2. eauto using ArrE.
-    + eauto using ArrE.
-    + eauto using ArrE.
+    + inv H2. inv H1. inv H2. eauto with hil.
+    + eauto with hil.
+    + eauto with hil.
 Qed.
 
 Definition reds :=
 rtc red.
 Notation "e1 ≻* e2" := (reds e1 e2) ( at level 60).
 
+(*Question 2.3.e*)
 Lemma app_red e1 e1' e2 :
 e1 ≻* e1' ->
 e1 e2 ≻* e1' e2.
@@ -276,7 +294,7 @@ Proof.
 Qed.
 
   
-
+(*Question 2.3.f*)
 Lemma subject_reduction e1 e2 s :
 ⊢ e1 : s ->
 e1 ≻* e2 ->
@@ -314,6 +332,9 @@ Proof.
     eapply H0; eauto using redAppL, Sub_app1.
 Qed.
 
+(*I don't know how to prove this without such a lemma, the induction hypthesis seems to weak without it*)
+
+(*Question 2.3.g*)
 Lemma SN_app e1 e2 :
 SN ( e1 e2) -> SN e1.
 Proof.
@@ -323,15 +344,14 @@ Proof.
   - constructor.
 Qed.
 
+
 Definition neutral (e : term) :=
 match e with
 | app K _ | K | app ( app S _) _ | S | app S _ => False
 | _ => True
 end.
 
-  
-  
-
+(*Question 2.3.h*)
 Lemma neutral_app e1 e2 :
 neutral e1 -> neutral (e1 e2).
 Proof.
@@ -340,7 +360,7 @@ Proof.
 Qed.
 
 
-
+(*Question 2.3.i*)
 Lemma progress e s :
 ( nil ⊢ e : s) -> (exists e', e ≻ e') \/ ~ neutral e.
 Proof.
@@ -371,6 +391,7 @@ end.
 
 Notation " ⊨ e : s" := (forces e s)  ( at level 60, e at next level).
 
+(*Question 2.4.1*)
 Theorem forcing_prop : forall s e, (⊨ e : s -> SN e) /\ ( ⊨ e : s -> forall e', e ≻* e' -> ⊨ e' : s) /\ (neutral e -> (forall e', e ≻ e' -> ⊨ e' : s) -> ⊨ e : s).
 Proof.
   intro s.
@@ -419,7 +440,7 @@ Proof.
 Qed.
 
         
-    
+(*Question 2.4.2*)    
 Lemma K_forced : forall s t, ⊨ K : s ∼> t ∼> s.
 Proof.
   intros s t e0 F0 e1 F1.
@@ -457,7 +478,7 @@ Qed.
 
 
 
-     
+(*triple ind, i did it for SN directly instead of SN_on to make it somewhat readable*)     
 Lemma SN_triple_ind
   (P : term -> term -> term -> Prop) :
   ( forall a b c,
@@ -485,7 +506,7 @@ Proof.
     apply H2; [easy | constructor; auto ].
 Qed.
 
-
+(*Question 2.3.3*)
 Lemma S_forced : forall s t u, ⊨ S : (s ∼> t ∼> u) ∼> (s ∼> t) ∼> s ∼> u.
 Proof.
   intros s t u e0 F0 e1 F1 e2 F2.
@@ -531,10 +552,7 @@ Proof.
         -- assumption.
 Qed.
 
-(*
-Assume that whenever the n-th element of A is s, ⊨ V n : s holds. Then A ⊢ e : s
-implies ⊨ e : s.
- *)
+(*Question 2.3.4*)
 Theorem V_forced : forall A s e, (forall t n, nth_error A n = Some t -> ⊨ V n : t) -> A ⊢ e : s -> ⊨ e : s.
 Proof.
   intros A s e H types.
@@ -545,6 +563,7 @@ Proof.
   - apply S_forced.
 Qed.
 
+(*Question 2.3.5*)
 Lemma well_typed_is_sn : forall s e, [] ⊢ e : s -> SN e.
 Proof.
   intros s e H.
@@ -565,6 +584,7 @@ Proof.
     apply (H2 e2 H4).
 Qed.
 
+(*Question 2.3.6*)
 Lemma well_typed_is_wn :
   forall s e, [] ⊢ e : s -> exists e', e ≻* e' /\ [] ⊢ e' : s /\ ~ neutral e'.
 Proof.
@@ -573,7 +593,7 @@ Proof.
   now apply well_typed_is_sn with s. 
 Qed.
 
-
+(*Question 2.6.a*)
 Lemma noterm e :
 ~ [] ⊢ e : bot.
 Proof.
@@ -600,7 +620,7 @@ Proof.
       * firstorder.
 Qed.
 
-
+(*Question 2.6.b*)
 Corollary nd_consistent :
 ~ [] ⊢m bot.
 Proof.
@@ -612,6 +632,7 @@ Proof.
   assumption.
 Qed.
 
+(*Question 2.6.c*)
 Corollary ndc_consistent :
 ~ [] ⊢c bot.
 Proof.
